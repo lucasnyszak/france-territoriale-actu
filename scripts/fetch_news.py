@@ -23,7 +23,7 @@ import yaml
 WIKI_BASE               = "https://france-territoriale.yeswiki.pro"
 PAGE_TAG                = "ActualitEs"
 PARIS_TZ                = ZoneInfo("Europe/Paris")
-MAX_ARTICLES_PER_SOURCE = 5
+MAX_ARTICLES_PER_SOURCE = 10
 MAX_AGE_HOURS           = 48
 MAX_KW_IN_PROMPT        = 20
 
