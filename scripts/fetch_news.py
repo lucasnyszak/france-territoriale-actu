@@ -27,6 +27,7 @@ MAX_ARTICLES_PER_SOURCE = 5
 MAX_AGE_HOURS           = 48
 MAX_KW_IN_PROMPT        = 20
 MAX_RELATED_RESOURCES   = 3
+MIN_SCORE               = 0.05   # Score minimum pour afficher une ressource liee
 
 THEMATIQUES_VALIDES = [
     "Transitions",
@@ -69,7 +70,7 @@ def fetch_keyword_labels(session):
 def fetch_all_wiki_resources(session, kw_labels):
     """Charge toutes les ressources de la gare centrale avec leurs mots-cles."""
     try:
-        resp = session.get(WIKI_BASE + "/?api/forms/8/entries", timeout=20)
+        resp    = session.get(WIKI_BASE + "/?api/forms/8/entries", timeout=20)
         entries = resp.json()
         resources = []
         for entry in entries:
@@ -84,7 +85,6 @@ def fetch_all_wiki_resources(session, kw_labels):
             resources.append({
                 "title":      entry["bf_titre"],
                 "wiki_url":   WIKI_BASE + "/?" + entry["id_fiche"],
-                "ext_url":    entry.get("bf_url", ""),
                 "thematique": entry.get("bf_thematique", ""),
                 "keywords":   keywords,
             })
@@ -95,23 +95,59 @@ def fetch_all_wiki_resources(session, kw_labels):
         return []
 
 
-def find_related_resources(article, all_resources):
-    """Retourne les ressources de la gare centrale les plus pertinentes pour un article."""
-    article_theme = article.get("thematique", "")
+def find_related_resources(article, all_resources, shown_counts):
+    """
+    Retourne les ressources les plus pertinentes pour un article.
+
+    Scoring :
+    - Similarite Jaccard sur les mots-cles (|intersection| / |union|)
+      -> normalise : une ressource tres specifique qui matche bien
+         bat une ressource generique qui matche peu
+    - Bonus thematique identique (+0.2)
+    - Penalite de repetition : diviseur (1 + nb fois deja affichee)
+      -> favorise la diversite entre les cartes
+    - Seuil minimum MIN_SCORE : pas de ressource si le lien est trop faible
+    - Au moins 1 mot-cle en commun requis
+    """
     article_kws   = set(article.get("mots_cles_wiki", []))
+    article_theme = article.get("thematique", "")
+
+    if not article_kws:
+        return []
 
     scored = []
     for r in all_resources:
-        score = 0
-        if r["thematique"] == article_theme:
-            score += 1
-        shared = article_kws & set(r["keywords"])
-        score += len(shared) * 2
-        if score > 0:
+        resource_kws = set(r["keywords"])
+        if not resource_kws:
+            continue
+
+        shared = article_kws & resource_kws
+        if not shared:
+            continue   # Au moins 1 mot-cle commun requis
+
+        # Jaccard : pertinence normalisee par la taille des ensembles
+        union   = article_kws | resource_kws
+        jaccard = len(shared) / len(union)
+
+        # Bonus si meme thematique
+        theme_bonus = 0.2 if r["thematique"] == article_theme else 0.0
+
+        # Penalite de repetition (favorise la diversite)
+        repetitions      = shown_counts.get(r["wiki_url"], 0)
+        diversity_factor = 1.0 / (1.0 + repetitions)
+
+        score = (jaccard + theme_bonus) * diversity_factor
+        if score >= MIN_SCORE:
             scored.append((score, r))
 
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [r for _, r in scored[:MAX_RELATED_RESOURCES]]
+    result = [r for _, r in scored[:MAX_RELATED_RESOURCES]]
+
+    # Mise a jour du compteur de repetitions
+    for r in result:
+        shown_counts[r["wiki_url"]] = shown_counts.get(r["wiki_url"], 0) + 1
+
+    return result
 
 
 def fetch_resource_keywords(session, wiki_id, kw_labels):
@@ -207,6 +243,9 @@ def build_page(articles, all_resources, date_str):
             '    ' + kw_btns + '  </div>'
         )
 
+    # Compteur de repetitions partage entre toutes les cartes
+    shown_counts = {}
+
     cards_html = ""
     for a in articles:
         theme    = a.get("thematique", "Autre")
@@ -216,9 +255,8 @@ def build_page(articles, all_resources, date_str):
         pub      = a["published"].astimezone(PARIS_TZ).strftime("%d/%m/%Y") if a.get("published") else ""
         meta     = a["source"] + (" - " + pub if pub else "")
 
-        # Ressources liees
-        related   = find_related_resources(a, all_resources)
-        res_html  = ""
+        related  = find_related_resources(a, all_resources, shown_counts)
+        res_html = ""
         if related:
             res_links = "".join(
                 '<a class="ft-res-link" href="' + r["wiki_url"] + '" target="_blank" rel="noopener">'
