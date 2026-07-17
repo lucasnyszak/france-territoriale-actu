@@ -192,65 +192,65 @@ def build_page(articles: list, date_str: str) -> str:
   </div>
 """
 
-return f"""<style>
-.ft-wrap{{font-family:sans-serif;max-width:900px}}
-.ft-header{{background:#f0f4f8;border-left:4px solid #2d6a9f;padding:14px 18px;border-radius:4px;margin-bottom:18px;font-size:14px}}
-.ft-header strong{{font-size:16px;display:block;margin-bottom:4px}}
-.ft-section-label{{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#888;margin:14px 0 6px}}
-.ft-filters{{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}}
-.ft-btn{{padding:5px 14px;border:1.5px solid #2d6a9f;border-radius:20px;background:white;color:#2d6a9f;cursor:pointer;font-size:13px;transition:all .15s}}
-.ft-btn:hover,.ft-btn.active{{background:#2d6a9f;color:white}}
-.ft-kw-pill{{border-color:#6b7280;color:#6b7280;font-size:12px}}
-.ft-kw-pill:hover,.ft-kw-pill.active{{background:#6b7280;color:white}}
-.ft-grid{{display:grid;gap:14px;margin-top:18px}}
-.ft-card{{border:1px solid #dde3ea;border-radius:6px;padding:14px 16px;background:white}}
-.ft-card.ft-hidden{{display:none}}
-.ft-tag{{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;background:#e8f0fe;color:#2d6a9f;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em}}
-.ft-title{{font-size:15px;font-weight:bold;margin-bottom:5px;line-height:1.4}}
-.ft-title a{{color:#1a3c5e;text-decoration:none}}
-.ft-title a:hover{{text-decoration:underline}}
-.ft-meta{{font-size:12px;color:#888;margin-bottom:8px}}
-.ft-resume{{font-size:13px;color:#444;line-height:1.55}}
-.ft-kws{{margin-top:10px;display:flex;flex-wrap:wrap;gap:5px}}
-.ft-kw{{font-size:11px;background:#f3f4f6;padding:2px 8px;border-radius:10px;color:#555;border:1px solid #e5e7eb}}
-</style>
+    return f"""<style>
+    .ft-wrap{{font-family:sans-serif;max-width:900px}}
+    .ft-header{{background:#f0f4f8;border-left:4px solid #2d6a9f;padding:14px 18px;border-radius:4px;margin-bottom:18px;font-size:14px}}   
+    .ft-header strong{{font-size:16px;display:block;margin-bottom:4px}}
+    .ft-section-label{{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#888;margin:14px 0 6px}}
+    .ft-filters{{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}}
+    .ft-btn{{padding:5px 14px;border:1.5px solid #2d6a9f;border-radius:20px;background:white;color:#2d6a9f;cursor:pointer;font-size:13px;transition:all .15s}}
+    .ft-btn:hover,.ft-btn.active{{background:#2d6a9f;color:white}}
+    .ft-kw-pill{{border-color:#6b7280;color:#6b7280;font-size:12px}}
+    .ft-kw-pill:hover,.ft-kw-pill.active{{background:#6b7280;color:white}}
+    .ft-grid{{display:grid;gap:14px;margin-top:18px}}
+    .ft-card{{border:1px solid #dde3ea;border-radius:6px;padding:14px 16px;background:white}}
+    .ft-card.ft-hidden{{display:none}}
+    .ft-tag{{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;background:#e8f0fe;color:#2d6a9f;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em}}
+    .ft-title{{font-size:15px;font-weight:bold;margin-bottom:5px;line-height:1.4}}
+    .ft-title a{{color:#1a3c5e;text-decoration:none}}
+    .ft-title a:hover{{text-decoration:underline}}
+    .ft-meta{{font-size:12px;color:#888;margin-bottom:8px}}
+    .ft-resume{{font-size:13px;color:#444;line-height:1.55}}
+    .ft-kws{{margin-top:10px;display:flex;flex-wrap:wrap;gap:5px}}
+    .ft-kw{{font-size:11px;background:#f3f4f6;padding:2px 8px;border-radius:10px;color:#555;border:1px solid #e5e7eb}}
+    </style>
 
-<div class="ft-wrap">
-  <div class="ft-header">
-    <strong>Actualités de la gare centrale</strong>
-    Mise à jour : {date_str} · {len(articles)} articles · {nb_sources} source{'s' if nb_sources > 1 else ''}
-  </div>
-  <div class="ft-section-label">Filtrer par thématique</div>
-  <div class="ft-filters">
-    {theme_btns}  </div>{kw_section}
-  <div class="ft-grid">
-{cards_html}  </div>
-</div>
+    <div class="ft-wrap">
+      <div class="ft-header">
+        <strong>Actualités de la gare centrale</strong>
+        Mise à jour : {date_str} · {len(articles)} articles · {nb_sources} source{'s' if nb_sources > 1 else ''}
+      </div>
+      <div class="ft-section-label">Filtrer par thématique</div>
+      <div class="ft-filters">
+        {theme_btns}  </div>{kw_section}
+      <div class="ft-grid">
+    {cards_html}  </div>
+    </div>
 
-<script>
-(function(){{
-  var activeTheme='all', activeKw='all';
-  function apply(){{
-    document.querySelectorAll('.ft-card').forEach(function(c){{
-      var tOk=activeTheme==='all'||c.dataset.theme===activeTheme;
-      var kOk=activeKw==='all'||JSON.parse(c.dataset.kws||'[]').indexOf(activeKw)!==-1;
-      c.classList.toggle('ft-hidden',!(tOk&&kOk));
-    }});
-  }}
-  document.querySelectorAll('.ft-theme-btn').forEach(function(b){{
-    b.addEventListener('click',function(){{
-      document.querySelectorAll('.ft-theme-btn').forEach(function(x){{x.classList.remove('active');}});
-      b.classList.add('active'); activeTheme=b.dataset.theme; apply();
+    <script>
+    (function(){{
+      var activeTheme='all', activeKw='all';
+      function apply(){{
+        document.querySelectorAll('.ft-card').forEach(function(c){{
+          var tOk=activeTheme==='all'||c.dataset.theme===activeTheme;
+          var kOk=activeKw==='all'||JSON.parse(c.dataset.kws||'[]').indexOf(activeKw)!==-1;
+          c.classList.toggle('ft-hidden',!(tOk&&kOk));
+        }});
+      }}
+      document.querySelectorAll('.ft-theme-btn').forEach(function(b){{
+        b.addEventListener('click',function(){{
+          document.querySelectorAll('.ft-theme-btn').forEach(function(x){{x.classList.remove('active');}});
+          b.classList.add('active'); activeTheme=b.dataset.theme; apply();
     }});
   }});
   document.querySelectorAll('.ft-kw-btn').forEach(function(b){{
     b.addEventListener('click',function(){{
       document.querySelectorAll('.ft-kw-btn').forEach(function(x){{x.classList.remove('active');}});
-      b.classList.add('active'); activeKw=b.dataset.kw; apply();
-    }});
-  }});
-}})();
-</script>"""
+          b.classList.add('active'); activeKw=b.dataset.kw; apply();
+        }});
+      }});
+    }})();
+    </script>"""
 
 # ── Publication wiki ──────────────────────────────────────────────────────────
 
