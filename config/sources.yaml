@@ -1,3 +1,8 @@
+# Configuration des sources RSS pour la page Actualités de France Territoriale
+# Thématiques disponibles :
+#   Transitions | Numérique | Finances | Urbanisme / Aménagement
+#   Action Sociale | Animer / Décider / Coopérer | Autre
+
 sources:
 
   - name: CEREMA
@@ -9,3 +14,13 @@ sources:
       - Transitions
       - Urbanisme / Aménagement
       - Numérique
+
+  - name: ADEME - Librairie
+    wiki_id: LaLibrairieAdeme2
+    rss_urls:
+      - https://librairie.ademe.fr/rss/nouveautes.xml
+      - https://librairie.ademe.fr/rss/actualites.xml
+    thematiques:
+      - Transitions
+      - Numérique
+      - Finances
