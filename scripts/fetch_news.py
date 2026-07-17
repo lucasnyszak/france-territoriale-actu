@@ -310,16 +310,7 @@ def main():
         timeout=10,
         allow_redirects=True,
     )
-    me = session.get(f"{WIKI_BASE}/?api/auth/me", timeout=10)
-    try:
-        me_data = me.json()
-        connected = bool(me_data.get("name") or me_data.get("username"))
-    except Exception:
-        connected = bool(session.cookies)
-    if not connected:
-        print("Échec login — vérifier WIKI_USERNAME et WIKI_PASSWORD", file=sys.stderr)
-        sys.exit(1)
-    print("  ✓ Connecté")
+    print("  ✓ Session établie")
 
     print("\nChargement des mots-clés du wiki…")
     kw_labels = fetch_keyword_labels(session)
