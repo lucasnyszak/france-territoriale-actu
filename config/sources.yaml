@@ -1,0 +1,11 @@
+sources:
+
+  - name: CEREMA
+    wiki_id: CeremA
+    rss_urls:
+      - https://www.cerema.fr/fr/rss/news/feed
+      - https://doc.cerema.fr/Portal/Recherche/Search.svc/SearchRss?key=4517a4fa103f7f4b081f437a4830c82d&useSearchSort=false&useSearchResultSize=true
+    thematiques:
+      - Transitions
+      - Urbanisme / Aménagement
+      - Numérique
