@@ -24,3 +24,12 @@ sources:
       - Transitions
       - Numérique
       - Finances
+
+  - name: Banque des Territoires
+    wiki_id: RessourcesDeLaBanqueDesTerritoires
+    rss_urls:
+      - https://www.banquedesterritoires.fr/flux/localtis.xml
+    thematiques:
+      - Finances
+      - Urbanisme / Aménagement
+      - Transitions
