@@ -295,7 +295,7 @@ def main():
     session = requests.Session()
     session.headers.update({"User-Agent": "FranceTerritoriale-Bot/1.0"})
 
-print("Authentification au wiki…")
+    print("Authentification au wiki…")
     base_url = f"{WIKI_BASE}/?PagePrincipale="
     session.post(
         base_url,
@@ -310,7 +310,6 @@ print("Authentification au wiki…")
         timeout=10,
         allow_redirects=True,
     )
-    # Vérifier que la session est bien authentifiée
     me = session.get(f"{WIKI_BASE}/?api/auth/me", timeout=10)
     try:
         me_data = me.json()
