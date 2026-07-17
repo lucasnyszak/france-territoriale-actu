@@ -23,9 +23,10 @@ import yaml
 WIKI_BASE               = "https://france-territoriale.yeswiki.pro"
 PAGE_TAG                = "ActualitEs"
 PARIS_TZ                = ZoneInfo("Europe/Paris")
-MAX_ARTICLES_PER_SOURCE = 10
+MAX_ARTICLES_PER_SOURCE = 5
 MAX_AGE_HOURS           = 48
 MAX_KW_IN_PROMPT        = 20
+MAX_RELATED_RESOURCES   = 3
 
 THEMATIQUES_VALIDES = [
     "Transitions",
@@ -54,10 +55,7 @@ def camel_to_label(tag):
 
 def fetch_keyword_labels(session):
     try:
-        resp = session.get(
-            WIKI_BASE + "/?api/forms/9/entries&fields=id_fiche,bf_titre",
-            timeout=15,
-        )
+        resp = session.get(WIKI_BASE + "/?api/forms/9/entries&fields=id_fiche,bf_titre", timeout=15)
         return {
             e["id_fiche"]: e["bf_titre"]
             for e in resp.json()
@@ -68,12 +66,57 @@ def fetch_keyword_labels(session):
         return {}
 
 
+def fetch_all_wiki_resources(session, kw_labels):
+    """Charge toutes les ressources de la gare centrale avec leurs mots-cles."""
+    try:
+        resp = session.get(WIKI_BASE + "/?api/forms/8/entries", timeout=20)
+        entries = resp.json()
+        resources = []
+        for entry in entries:
+            if not entry.get("bf_titre") or not entry.get("id_fiche"):
+                continue
+            kw_ids = []
+            for field in KEYWORD_FIELDS:
+                val = entry.get(field, "")
+                if val:
+                    kw_ids.extend(val.split(","))
+            keywords = [kw_labels.get(k.strip(), camel_to_label(k.strip())) for k in kw_ids if k.strip()]
+            resources.append({
+                "title":      entry["bf_titre"],
+                "wiki_url":   WIKI_BASE + "/?" + entry["id_fiche"],
+                "ext_url":    entry.get("bf_url", ""),
+                "thematique": entry.get("bf_thematique", ""),
+                "keywords":   keywords,
+            })
+        print("  OK " + str(len(resources)) + " ressources chargees depuis la gare centrale")
+        return resources
+    except Exception as e:
+        print("  Erreur chargement ressources : " + str(e), file=sys.stderr)
+        return []
+
+
+def find_related_resources(article, all_resources):
+    """Retourne les ressources de la gare centrale les plus pertinentes pour un article."""
+    article_theme = article.get("thematique", "")
+    article_kws   = set(article.get("mots_cles_wiki", []))
+
+    scored = []
+    for r in all_resources:
+        score = 0
+        if r["thematique"] == article_theme:
+            score += 1
+        shared = article_kws & set(r["keywords"])
+        score += len(shared) * 2
+        if score > 0:
+            scored.append((score, r))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [r for _, r in scored[:MAX_RELATED_RESOURCES]]
+
+
 def fetch_resource_keywords(session, wiki_id, kw_labels):
     try:
-        resp = session.get(
-            WIKI_BASE + "/?api/forms/8/entries&id_fiche=" + wiki_id,
-            timeout=10,
-        )
+        resp    = session.get(WIKI_BASE + "/?api/forms/8/entries&id_fiche=" + wiki_id, timeout=10)
         entries = resp.json()
         if not entries:
             return []
@@ -144,12 +187,12 @@ def summarize_article(client, article, thematiques_source, wiki_keywords):
     return {"resume": article["summary"][:250], "thematique": thematiques_source[0], "mots_cles_wiki": []}
 
 
-def build_page(articles, date_str):
+def build_page(articles, all_resources, date_str):
     thematiques = sorted({a["thematique"] for a in articles if a.get("thematique")})
     all_kws     = sorted({kw for a in articles for kw in a.get("mots_cles_wiki", [])})
     nb_sources  = len({a["source"] for a in articles})
 
-    theme_btns  = '<button class="ft-btn ft-theme-btn active" data-theme="all">Toutes thematiques</button>\n'
+    theme_btns = '<button class="ft-btn ft-theme-btn active" data-theme="all">Toutes thematiques</button>\n'
     for t in thematiques:
         theme_btns += '    <button class="ft-btn ft-theme-btn" data-theme="' + t + '">' + t + '</button>\n'
 
@@ -160,7 +203,7 @@ def build_page(articles, date_str):
             kw_btns += '    <button class="ft-btn ft-kw-btn ft-kw-pill" data-kw="' + kw + '">' + kw + '</button>\n'
         kw_section = (
             '\n  <div class="ft-section-label">Filtrer par mot-cle</div>\n'
-            '  <div class="ft-filters ft-kw-filters">\n'
+            '  <div class="ft-filters">\n'
             '    ' + kw_btns + '  </div>'
         )
 
@@ -172,6 +215,23 @@ def build_page(articles, date_str):
         kws_html = "".join('<span class="ft-kw">' + kw + '</span>' for kw in kws_list)
         pub      = a["published"].astimezone(PARIS_TZ).strftime("%d/%m/%Y") if a.get("published") else ""
         meta     = a["source"] + (" - " + pub if pub else "")
+
+        # Ressources liees
+        related   = find_related_resources(a, all_resources)
+        res_html  = ""
+        if related:
+            res_links = "".join(
+                '<a class="ft-res-link" href="' + r["wiki_url"] + '" target="_blank" rel="noopener">'
+                + r["title"] + '</a>'
+                for r in related
+            )
+            res_html = (
+                '<div class="ft-related">'
+                '<span class="ft-related-label">Ressources liees</span>'
+                + res_links
+                + '</div>'
+            )
+
         cards_html += (
             '  <div class="ft-card" data-theme="' + theme + '" data-kws=\'' + kws_data + '\'>\n'
             '    <span class="ft-tag">' + theme + '</span>\n'
@@ -179,6 +239,7 @@ def build_page(articles, date_str):
             '    <div class="ft-meta">' + meta + '</div>\n'
             '    <div class="ft-resume">' + a["resume"] + '</div>\n'
             '    <div class="ft-kws">' + kws_html + '</div>\n'
+            '    ' + res_html + '\n'
             '  </div>\n'
         )
 
@@ -206,6 +267,10 @@ def build_page(articles, date_str):
         ".ft-resume{font-size:13px;color:#444;line-height:1.55}\n"
         ".ft-kws{margin-top:10px;display:flex;flex-wrap:wrap;gap:5px}\n"
         ".ft-kw{font-size:11px;background:#f3f4f6;padding:2px 8px;border-radius:10px;color:#555;border:1px solid #e5e7eb}\n"
+        ".ft-related{margin-top:12px;padding-top:10px;border-top:1px solid #eef0f3}\n"
+        ".ft-related-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-right:8px}\n"
+        ".ft-res-link{display:inline-block;font-size:12px;color:#2d6a9f;background:#f0f4fb;border:1px solid #c7d8f0;border-radius:4px;padding:2px 8px;margin:3px 4px 3px 0;text-decoration:none}\n"
+        ".ft-res-link:hover{background:#2d6a9f;color:white}\n"
         "</style>\n"
     )
 
@@ -251,7 +316,6 @@ def build_page(articles, date_str):
         + '</script>\n'
     )
 
-    # Encadrement YesWiki pour forcer le rendu HTML brut
     return chr(34) + chr(34) + chr(10) + html + chr(10) + chr(34) + chr(34)
 
 
@@ -312,6 +376,9 @@ def main():
     kw_labels = fetch_keyword_labels(session)
     print("  OK " + str(len(kw_labels)) + " mots-cles charges")
 
+    print("\nChargement des ressources de la gare centrale...")
+    all_resources = fetch_all_wiki_resources(session, kw_labels)
+
     all_articles = []
     for source in config.get("sources", []):
         name        = source["name"]
@@ -323,7 +390,7 @@ def main():
         if wiki_id:
             wiki_keywords = fetch_resource_keywords(session, wiki_id, kw_labels)
             preview = ", ".join(wiki_keywords[:8]) + ("..." if len(wiki_keywords) > 8 else "")
-            print("  Mots-cles : " + preview)
+            print("  Mots-cles : " + (preview or "aucun"))
 
         raw = []
         for url in source.get("rss_urls", []):
@@ -367,7 +434,7 @@ def main():
     )
 
     date_str = datetime.now(PARIS_TZ).strftime("%d/%m/%Y a %Hh%M")
-    content  = build_page(all_articles, date_str)
+    content  = build_page(all_articles, all_resources, date_str)
 
     print("\nPublication de " + str(len(all_articles)) + " articles sur " + PAGE_TAG + "...")
     if publish_page(session, PAGE_TAG, content):
