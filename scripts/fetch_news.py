@@ -192,8 +192,7 @@ def build_page(articles: list, date_str: str) -> str:
   </div>
 """
 
-    return f"""\"\"
-<style>
+    _page = f"""<style>
     .ft-wrap{{font-family:sans-serif;max-width:900px}}
     .ft-header{{background:#f0f4f8;border-left:4px solid #2d6a9f;padding:14px 18px;border-radius:4px;margin-bottom:18px;font-size:14px}}   
     .ft-header strong{{font-size:16px;display:block;margin-bottom:4px}}
@@ -251,7 +250,8 @@ def build_page(articles: list, date_str: str) -> str:
         }});
       }});
     }})();
-    </script>
+    </script>"""
+    return '""' + '\n' + _page + '\n' + '""'
 \"\"\"\"\"\"
 
 # ── Publication wiki ──────────────────────────────────────────────────────────
