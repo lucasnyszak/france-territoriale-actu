@@ -295,14 +295,30 @@ def main():
     session = requests.Session()
     session.headers.update({"User-Agent": "FranceTerritoriale-Bot/1.0"})
 
-    print("Authentification au wiki…")
-    login = session.post(
-        f"{WIKI_BASE}/?api/auth/login",
-        data={"user": os.environ["WIKI_USERNAME"], "password": os.environ["WIKI_PASSWORD"]},
+print("Authentification au wiki…")
+    base_url = f"{WIKI_BASE}/?PagePrincipale="
+    session.post(
+        base_url,
+        data={
+            "name":        os.environ["WIKI_USERNAME"],
+            "password":    os.environ["WIKI_PASSWORD"],
+            "action":      "login",
+            "context":     "PageRapideHaut",
+            "incomingurl": base_url,
+            "userpage":    base_url,
+        },
         timeout=10,
+        allow_redirects=True,
     )
-    if login.status_code != 200:
-        print(f"Échec login : HTTP {login.status_code}", file=sys.stderr)
+    # Vérifier que la session est bien authentifiée
+    me = session.get(f"{WIKI_BASE}/?api/auth/me", timeout=10)
+    try:
+        me_data = me.json()
+        connected = bool(me_data.get("name") or me_data.get("username"))
+    except Exception:
+        connected = bool(session.cookies)
+    if not connected:
+        print("Échec login — vérifier WIKI_USERNAME et WIKI_PASSWORD", file=sys.stderr)
         sys.exit(1)
     print("  ✓ Connecté")
 
