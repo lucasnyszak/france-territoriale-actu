@@ -11,6 +11,7 @@ import json
 import os
 import re
 import sys
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -27,7 +28,7 @@ MAX_ARTICLES_PER_SOURCE = 5
 MAX_AGE_HOURS           = 48
 MAX_KW_IN_PROMPT        = 20
 MAX_RELATED_RESOURCES   = 3
-MIN_SCORE               = 0.05   # Score minimum pour afficher une ressource liee
+MIN_SCORE               = 0.05
 
 THEMATIQUES_VALIDES = [
     "Transitions",
@@ -68,7 +69,6 @@ def fetch_keyword_labels(session):
 
 
 def fetch_all_wiki_resources(session, kw_labels):
-    """Charge toutes les ressources de la gare centrale avec leurs mots-cles."""
     try:
         resp    = session.get(WIKI_BASE + "/?api/forms/8/entries", timeout=20)
         entries = resp.json()
@@ -96,19 +96,6 @@ def fetch_all_wiki_resources(session, kw_labels):
 
 
 def find_related_resources(article, all_resources, shown_counts):
-    """
-    Retourne les ressources les plus pertinentes pour un article.
-
-    Scoring :
-    - Similarite Jaccard sur les mots-cles (|intersection| / |union|)
-      -> normalise : une ressource tres specifique qui matche bien
-         bat une ressource generique qui matche peu
-    - Bonus thematique identique (+0.2)
-    - Penalite de repetition : diviseur (1 + nb fois deja affichee)
-      -> favorise la diversite entre les cartes
-    - Seuil minimum MIN_SCORE : pas de ressource si le lien est trop faible
-    - Au moins 1 mot-cle en commun requis
-    """
     article_kws   = set(article.get("mots_cles_wiki", []))
     article_theme = article.get("thematique", "")
 
@@ -120,33 +107,22 @@ def find_related_resources(article, all_resources, shown_counts):
         resource_kws = set(r["keywords"])
         if not resource_kws:
             continue
-
         shared = article_kws & resource_kws
         if not shared:
-            continue   # Au moins 1 mot-cle commun requis
-
-        # Jaccard : pertinence normalisee par la taille des ensembles
-        union   = article_kws | resource_kws
-        jaccard = len(shared) / len(union)
-
-        # Bonus si meme thematique
-        theme_bonus = 0.2 if r["thematique"] == article_theme else 0.0
-
-        # Penalite de repetition (favorise la diversite)
+            continue
+        union            = article_kws | resource_kws
+        jaccard          = len(shared) / len(union)
+        theme_bonus      = 0.2 if r["thematique"] == article_theme else 0.0
         repetitions      = shown_counts.get(r["wiki_url"], 0)
         diversity_factor = 1.0 / (1.0 + repetitions)
-
         score = (jaccard + theme_bonus) * diversity_factor
         if score >= MIN_SCORE:
             scored.append((score, r))
 
     scored.sort(key=lambda x: x[0], reverse=True)
     result = [r for _, r in scored[:MAX_RELATED_RESOURCES]]
-
-    # Mise a jour du compteur de repetitions
     for r in result:
         shown_counts[r["wiki_url"]] = shown_counts.get(r["wiki_url"], 0) + 1
-
     return result
 
 
@@ -223,135 +199,201 @@ def summarize_article(client, article, thematiques_source, wiki_keywords):
     return {"resume": article["summary"][:250], "thematique": thematiques_source[0], "mots_cles_wiki": []}
 
 
+# ---------------------------------------------------------------------------
+# COULEURS PAR THEMATIQUE
+# ---------------------------------------------------------------------------
+
+THEME_COLORS = {
+    "Transitions":                 ("e1f5ee", "0f6e56", "085041"),
+    "Numerique":                   ("eeedfe", "534ab7", "3c3489"),
+    "Finances":                    ("faeeda", "ba7517", "854f0b"),
+    "Urbanisme / Amenagement":     ("e6f1fb", "185fa5", "0c447c"),
+    "Action Sociale":              ("fbeaf0", "993556", "72243e"),
+    "Animer / Decider / Cooperer": ("eaf3de", "3b6d11", "27500a"),
+    "Autre":                       ("f1efe8", "5f5e5a", "444441"),
+}
+
+def theme_colors(theme):
+    return THEME_COLORS.get(theme, THEME_COLORS["Autre"])
+
+
+# ---------------------------------------------------------------------------
+# CONSTRUCTION DE LA PAGE KANBAN
+# ---------------------------------------------------------------------------
+
 def build_page(articles, all_resources, date_str):
-    thematiques = sorted({a["thematique"] for a in articles if a.get("thematique")})
+    grouped    = defaultdict(list)
+    for a in articles:
+        grouped[a.get("thematique", "Autre")].append(a)
+
+    thematiques = sorted(grouped.keys())
     all_kws     = sorted({kw for a in articles for kw in a.get("mots_cles_wiki", [])})
     nb_sources  = len({a["source"] for a in articles})
+    nb_src_lbl  = str(nb_sources) + (" sources" if nb_sources > 1 else " source")
 
-    theme_btns = '<button class="ft-btn ft-theme-btn active" data-theme="all">Toutes thematiques</button>\n'
-    for t in thematiques:
-        theme_btns += '    <button class="ft-btn ft-theme-btn" data-theme="' + t + '">' + t + '</button>\n'
-
-    kw_section = ""
-    if all_kws:
-        kw_btns = '<button class="ft-btn ft-kw-btn active" data-kw="all">Tous mots-cles</button>\n'
-        for kw in all_kws:
-            kw_btns += '    <button class="ft-btn ft-kw-btn ft-kw-pill" data-kw="' + kw + '">' + kw + '</button>\n'
-        kw_section = (
-            '\n  <div class="ft-section-label">Filtrer par mot-cle</div>\n'
-            '  <div class="ft-filters">\n'
-            '    ' + kw_btns + '  </div>'
-        )
-
-    # Compteur de repetitions partage entre toutes les cartes
-    shown_counts = {}
-
-    cards_html = ""
-    for a in articles:
-        theme    = a.get("thematique", "Autre")
-        kws_list = a.get("mots_cles_wiki", [])
-        kws_data = json.dumps(kws_list, ensure_ascii=False)
-        kws_html = "".join('<span class="ft-kw">' + kw + '</span>' for kw in kws_list)
-        pub      = a["published"].astimezone(PARIS_TZ).strftime("%d/%m/%Y") if a.get("published") else ""
-        meta     = a["source"] + (" - " + pub if pub else "")
-
-        related  = find_related_resources(a, all_resources, shown_counts)
-        res_html = ""
-        if related:
-            res_links = "".join(
-                '<a class="ft-res-link" href="' + r["wiki_url"] + '" target="_blank" rel="noopener">'
-                + r["title"] + '</a>'
-                for r in related
-            )
-            res_html = (
-                '<div class="ft-related">'
-                '<span class="ft-related-label">Ressources liees</span>'
-                + res_links
-                + '</div>'
-            )
-
-        cards_html += (
-            '  <div class="ft-card" data-theme="' + theme + '" data-kws=\'' + kws_data + '\'>\n'
-            '    <span class="ft-tag">' + theme + '</span>\n'
-            '    <div class="ft-title"><a href="' + a["link"] + '" target="_blank" rel="noopener">' + a["title"] + '</a></div>\n'
-            '    <div class="ft-meta">' + meta + '</div>\n'
-            '    <div class="ft-resume">' + a["resume"] + '</div>\n'
-            '    <div class="ft-kws">' + kws_html + '</div>\n'
-            '    ' + res_html + '\n'
-            '  </div>\n'
-        )
-
-    nb_src_label = str(nb_sources) + (" sources" if nb_sources > 1 else " source")
-
+    # ---- CSS ---------------------------------------------------------------
     css = (
         "<style>\n"
-        ".ft-wrap{font-family:sans-serif;max-width:900px}\n"
-        ".ft-header{background:#f0f4f8;border-left:4px solid #2d6a9f;padding:14px 18px;border-radius:4px;margin-bottom:18px;font-size:14px}\n"
+        ".ft-wrap{font-family:sans-serif;max-width:100%}\n"
+        ".ft-header{background:#f0f4f8;border-left:4px solid #2d6a9f;padding:14px 18px;"
+        "border-radius:4px;margin-bottom:16px;font-size:14px}\n"
         ".ft-header strong{font-size:16px;display:block;margin-bottom:4px}\n"
-        ".ft-section-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#888;margin:14px 0 6px}\n"
-        ".ft-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}\n"
-        ".ft-btn{padding:5px 14px;border:1.5px solid #2d6a9f;border-radius:20px;background:white;color:#2d6a9f;cursor:pointer;font-size:13px;transition:all .15s}\n"
-        ".ft-btn:hover,.ft-btn.active{background:#2d6a9f;color:white}\n"
-        ".ft-kw-pill{border-color:#6b7280;color:#6b7280;font-size:12px}\n"
-        ".ft-kw-pill:hover,.ft-kw-pill.active{background:#6b7280;color:white}\n"
-        ".ft-grid{display:grid;gap:14px;margin-top:18px}\n"
-        ".ft-card{border:1px solid #dde3ea;border-radius:6px;padding:14px 16px;background:white}\n"
+        ".ft-section-label{font-size:11px;font-weight:600;text-transform:uppercase;"
+        "letter-spacing:.06em;color:#888;margin:0 0 8px}\n"
+        ".ft-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}\n"
+        ".ft-btn{padding:5px 14px;border:1.5px solid #6b7280;border-radius:20px;"
+        "background:white;color:#6b7280;cursor:pointer;font-size:12px;transition:all .15s}\n"
+        ".ft-btn:hover,.ft-btn.active{background:#6b7280;color:white}\n"
+        ".ft-empty-msg{display:none;font-size:13px;color:#888;padding:10px 0}\n"
+        ".ft-kanban{display:flex;gap:14px;align-items:flex-start;"
+        "overflow-x:auto;padding-bottom:12px}\n"
+        ".ft-col{min-width:260px;flex:1 1 260px;border-radius:8px;"
+        "border:1px solid #dde3ea;overflow:hidden;background:#f9fafb}\n"
+        ".ft-col.ft-col-hidden{display:none}\n"
+        ".ft-col-header{display:flex;justify-content:space-between;align-items:center;"
+        "padding:10px 14px;border-bottom:1px solid #dde3ea}\n"
+        ".ft-col-title{font-size:13px;font-weight:600;margin:0}\n"
+        ".ft-col-badge{font-size:11px;font-weight:600;padding:2px 8px;"
+        "border-radius:10px;min-width:20px;text-align:center}\n"
+        ".ft-col-cards{padding:10px;display:flex;flex-direction:column;gap:10px}\n"
+        ".ft-card{background:white;border:1px solid #e5e7eb;border-radius:6px;"
+        "padding:12px 14px;font-size:13px}\n"
         ".ft-card.ft-hidden{display:none}\n"
-        ".ft-tag{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;background:#e8f0fe;color:#2d6a9f;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em}\n"
-        ".ft-title{font-size:15px;font-weight:bold;margin-bottom:5px;line-height:1.4}\n"
-        ".ft-title a{color:#1a3c5e;text-decoration:none}\n"
-        ".ft-title a:hover{text-decoration:underline}\n"
-        ".ft-meta{font-size:12px;color:#888;margin-bottom:8px}\n"
-        ".ft-resume{font-size:13px;color:#444;line-height:1.55}\n"
-        ".ft-kws{margin-top:10px;display:flex;flex-wrap:wrap;gap:5px}\n"
-        ".ft-kw{font-size:11px;background:#f3f4f6;padding:2px 8px;border-radius:10px;color:#555;border:1px solid #e5e7eb}\n"
-        ".ft-related{margin-top:12px;padding-top:10px;border-top:1px solid #eef0f3}\n"
-        ".ft-related-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-right:8px}\n"
-        ".ft-res-link{display:inline-block;font-size:12px;color:#2d6a9f;background:#f0f4fb;border:1px solid #c7d8f0;border-radius:4px;padding:2px 8px;margin:3px 4px 3px 0;text-decoration:none}\n"
+        ".ft-card-title{font-size:14px;font-weight:600;margin:0 0 4px;line-height:1.4}\n"
+        ".ft-card-title a{color:#1a3c5e;text-decoration:none}\n"
+        ".ft-card-title a:hover{text-decoration:underline}\n"
+        ".ft-card-meta{font-size:11px;color:#888;margin-bottom:8px}\n"
+        ".ft-card-resume{color:#444;line-height:1.55;margin-bottom:8px}\n"
+        ".ft-kws{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}\n"
+        ".ft-kw{font-size:11px;background:#f3f4f6;padding:2px 7px;"
+        "border-radius:10px;color:#555;border:1px solid #e5e7eb}\n"
+        ".ft-related{border-top:1px solid #f0f0f0;padding-top:8px;margin-top:4px}\n"
+        ".ft-related-label{font-size:10px;font-weight:600;text-transform:uppercase;"
+        "letter-spacing:.05em;color:#aaa;display:block;margin-bottom:4px}\n"
+        ".ft-res-link{display:inline-block;font-size:11px;color:#2d6a9f;"
+        "background:#f0f4fb;border:1px solid #c7d8f0;border-radius:4px;"
+        "padding:2px 7px;margin:2px 3px 2px 0;text-decoration:none}\n"
         ".ft-res-link:hover{background:#2d6a9f;color:white}\n"
+        ".ft-no-results{display:none;text-align:center;padding:16px;"
+        "font-size:13px;color:#888;font-style:italic}\n"
         "</style>\n"
     )
 
+    # ---- Filtre mots-cles --------------------------------------------------
+    kw_btns = '<button class="ft-btn active" data-kw="all">Tous mots-cles</button>\n'
+    for kw in all_kws:
+        kw_btns += '    <button class="ft-btn" data-kw="' + kw + '">' + kw + '</button>\n'
+
+    # ---- Colonnes ----------------------------------------------------------
+    shown_counts  = {}
+    columns_html  = ""
+    for theme in thematiques:
+        bg, txt, txt2 = theme_colors(theme)
+        cards_html = ""
+        for a in grouped[theme]:
+            kws_list = a.get("mots_cles_wiki", [])
+            kws_data = json.dumps(kws_list, ensure_ascii=False)
+            kws_html = "".join('<span class="ft-kw">' + kw + '</span>' for kw in kws_list)
+            pub      = a["published"].astimezone(PARIS_TZ).strftime("%d/%m/%Y") if a.get("published") else ""
+            meta     = a["source"] + (" &bull; " + pub if pub else "")
+
+            related  = find_related_resources(a, all_resources, shown_counts)
+            res_html = ""
+            if related:
+                res_links = "".join(
+                    '<a class="ft-res-link" href="' + r["wiki_url"]
+                    + '" target="_blank" rel="noopener">' + r["title"] + '</a>'
+                    for r in related
+                )
+                res_html = (
+                    '<div class="ft-related">'
+                    '<span class="ft-related-label">Ressources liees</span>'
+                    + res_links
+                    + '</div>'
+                )
+
+            cards_html += (
+                '    <div class="ft-card" data-kws=\'' + kws_data + '\'>\n'
+                '      <div class="ft-card-title"><a href="' + a["link"]
+                + '" target="_blank" rel="noopener">' + a["title"] + '</a></div>\n'
+                '      <div class="ft-card-meta">' + meta + '</div>\n'
+                '      <div class="ft-card-resume">' + a["resume"] + '</div>\n'
+                '      <div class="ft-kws">' + kws_html + '</div>\n'
+                '      ' + res_html + '\n'
+                '    </div>\n'
+            )
+
+        nb = str(len(grouped[theme]))
+        columns_html += (
+            '  <div class="ft-col" data-theme="' + theme + '">\n'
+            '    <div class="ft-col-header" style="background:#' + bg + '">\n'
+            '      <span class="ft-col-title" style="color:#' + txt2 + '">' + theme + '</span>\n'
+            '      <span class="ft-col-badge" style="background:#' + txt + ';color:white">'
+            + nb + '</span>\n'
+            '    </div>\n'
+            '    <div class="ft-col-cards">\n'
+            + cards_html
+            + '    </div>\n'
+            '  </div>\n'
+        )
+
+    # ---- JS ----------------------------------------------------------------
+    js = (
+        "<script>\n"
+        "(function(){\n"
+        "  var activeKw='all';\n"
+        "  function apply(){\n"
+        "    document.querySelectorAll('.ft-card').forEach(function(c){\n"
+        "      var kws=JSON.parse(c.dataset.kws||'[]');\n"
+        "      var ok=activeKw==='all'||kws.indexOf(activeKw)!==-1;\n"
+        "      c.classList.toggle('ft-hidden',!ok);\n"
+        "    });\n"
+        "    var anyVisible=false;\n"
+        "    document.querySelectorAll('.ft-col').forEach(function(col){\n"
+        "      var cards=col.querySelectorAll('.ft-card');\n"
+        "      var vis=0;\n"
+        "      cards.forEach(function(c){if(!c.classList.contains('ft-hidden'))vis++;});\n"
+        "      col.classList.toggle('ft-col-hidden',vis===0);\n"
+        "      var badge=col.querySelector('.ft-col-badge');\n"
+        "      if(badge)badge.textContent=vis;\n"
+        "      if(vis>0)anyVisible=true;\n"
+        "    });\n"
+        "    var msg=document.getElementById('ft-no-results');\n"
+        "    if(msg)msg.style.display=anyVisible?'none':'block';\n"
+        "  }\n"
+        "  document.querySelectorAll('.ft-btn').forEach(function(b){\n"
+        "    b.addEventListener('click',function(){\n"
+        "      document.querySelectorAll('.ft-btn').forEach(function(x){"
+        "x.classList.remove('active');});\n"
+        "      b.classList.add('active');\n"
+        "      activeKw=b.dataset.kw;\n"
+        "      apply();\n"
+        "    });\n"
+        "  });\n"
+        "})();\n"
+        "</script>\n"
+    )
+
+    # ---- Assembly ----------------------------------------------------------
     html = (
         css
         + '<div class="ft-wrap">\n'
         + '  <div class="ft-header">\n'
         + '    <strong>Actualites de la gare centrale</strong>\n'
-        + '    Mise a jour : ' + date_str + ' - ' + str(len(articles)) + ' articles - ' + nb_src_label + '\n'
+        + '    Mise a jour : ' + date_str + ' &bull; '
+        + str(len(articles)) + ' articles &bull; ' + nb_src_lbl + '\n'
         + '  </div>\n'
-        + '  <div class="ft-section-label">Filtrer par thematique</div>\n'
+        + '  <div class="ft-section-label">Filtrer par mot-cle</div>\n'
         + '  <div class="ft-filters">\n'
-        + '    ' + theme_btns
-        + '  </div>'
-        + kw_section
-        + '\n  <div class="ft-grid">\n'
-        + cards_html
+        + '    ' + kw_btns
+        + '  </div>\n'
+        + '  <div id="ft-no-results" class="ft-no-results">'
+        + 'Aucun article pour ce mot-cle.</div>\n'
+        + '  <div class="ft-kanban">\n'
+        + columns_html
         + '  </div>\n'
         + '</div>\n'
-        + '<script>\n'
-        + '(function(){\n'
-        + '  var activeTheme="all", activeKw="all";\n'
-        + '  function apply(){\n'
-        + '    document.querySelectorAll(".ft-card").forEach(function(c){\n'
-        + '      var tOk=activeTheme==="all"||c.dataset.theme===activeTheme;\n'
-        + '      var kOk=activeKw==="all"||JSON.parse(c.dataset.kws||"[]").indexOf(activeKw)!==-1;\n'
-        + '      c.classList.toggle("ft-hidden",!(tOk&&kOk));\n'
-        + '    });\n'
-        + '  }\n'
-        + '  document.querySelectorAll(".ft-theme-btn").forEach(function(b){\n'
-        + '    b.addEventListener("click",function(){\n'
-        + '      document.querySelectorAll(".ft-theme-btn").forEach(function(x){x.classList.remove("active");});\n'
-        + '      b.classList.add("active"); activeTheme=b.dataset.theme; apply();\n'
-        + '    });\n'
-        + '  });\n'
-        + '  document.querySelectorAll(".ft-kw-btn").forEach(function(b){\n'
-        + '    b.addEventListener("click",function(){\n'
-        + '      document.querySelectorAll(".ft-kw-btn").forEach(function(x){x.classList.remove("active");});\n'
-        + '      b.classList.add("active"); activeKw=b.dataset.kw; apply();\n'
-        + '    });\n'
-        + '  });\n'
-        + '})();\n'
-        + '</script>\n'
+        + js
     )
 
     return chr(34) + chr(34) + chr(10) + html + chr(10) + chr(34) + chr(34)
