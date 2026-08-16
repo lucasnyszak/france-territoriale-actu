@@ -1,7 +1,6 @@
 # Configuration des sources RSS pour la page Actualités de France Territoriale
 # Thématiques disponibles :
-#   Transitions | Numérique | Finances | Urbanisme / Aménagement
-#   Action Sociale | Animer / Décider / Coopérer | Autre
+#   Transitions | Numérique | Finances | Urbanisme / Aménagement | Action Sociale | Animer / Décider / Coopérer | Autre | RH / QVCT | Innovation publique
 
 sources:
 
@@ -33,3 +32,10 @@ sources:
       - Finances
       - Urbanisme / Aménagement
       - Transitions
+
+  - name: "ANACT - Veille dialogue social"
+    wiki_id: VeilleAnact
+    thematiques:
+      - "RH / QVCT"
+    rss_urls:
+      - "https://veille-travail.anact.fr/osiros/result/rss.php?queryosiros=%2A%3A%28%2A%29&fq=%28sujets_tous%3A%28%22dialogue+social%22%29%29+AND+%28sujets_tous%3A%28%22negociation+collective%22%29+OR+NOT+fulltext%3A%28norme%29+OR+titres_tous%3A%28negociation%2A%29+OR+titres_tous%3A%28dialogue+social%29%29&sort_define=date_crea_notice"
