@@ -48,3 +48,46 @@ sources:
     rss_urls:
       - https://veille-travail.anact.fr/osiros/result/rss.php?queryosiros=fulltext%3A%28%C3%A9cologie%29+OR+fulltext%3A%28transition+%C3%A9cologique%29+&fq=&sort_define=date_crea_notice
       
+  - name: "ANACT - Egalité professionnelle"
+    wiki_id: VeilleAnact
+    thematiques:
+      - "RH / QVCT"
+    rss_urls:
+      - https://veille-travail.anact.fr/osiros/result/rss.php?queryosiros=%22%C3%A9galit%C3%A9+professionnelle%22&fq=fulltext%3A%28%22%C3%A9galit%C3%A9+professionnelle%22%29+AND+frbr%3A1&tmstp=2017-11-03T16%3A53%3A17Z&sort_define=date_crea_notice&sort_order=1
+
+  - name: "ANACT - Management"
+    wiki_id: VeilleAnact
+    thematiques:
+      - "RH / QVCT"
+      - "Animer / Décider / Coopérer"
+    rss_urls:
+      - https://veille-travail.anact.fr/osiros/result/rss.php?queryosiros=management&sort_define=date_crea_notice&sort_order=1
+
+  - name: "ANACT - Numérique et travail"
+    wiki_id: VeilleAnact
+    thematiques:
+      - "RH / QVCT"
+      - "Numérique"
+    rss_urls:
+      - https://veille-travail.anact.fr/osiros/result/rss.php?queryosiros=fulltext%3A%28num%C3%A9rique%29&fq=fulltext%3A%28num%C3%A9rique%29+AND+frbr%3A1&tmstp=2017-11-03T16%3A47%3A06Z&sort_define=date_crea_notice&sort_order=1
+
+  - name: "ANACT - Qualité de vie au travail"
+    wiki_id: VeilleAnact
+    thematiques:
+      - "RH / QVCT"
+    rss_urls:
+      - https://veille-travail.anact.fr/osiros/result/rss.php?queryosiros=%22qualit%C3%A9+de+vie+au+travail%22&fq=fulltext%3A%28%22qualit%C3%A9+de+vie+au+travail%22%29+AND+frbr%3A1&tmstp=2017-11-03T16%3A49%3A35Z&sort_define=date_crea_notice&sort_order=1     
+
+  - name: "ANACT - Santé au travail"
+    wiki_id: VeilleAnact
+    thematiques:
+      - "RH / QVCT"
+    rss_urls:
+      - https://veille-travail.anact.fr/osiros/result/resultat.php?queryosiros=sujets_tous%3A%28sante%29%20AND%20sujets_tous%3A%28prevention%20des%20risques%29%20&fq=&sort_define=date_crea_notice&sort_order=1&osirosrows=10
+
+  - name: "ANACT - télétravail et organisations du travail hybrides"
+    wiki_id: VeilleAnact
+    thematiques:
+      - "RH / QVCT"
+    rss_urls:
+      - https://veille-travail.anact.fr/osiros/result/rss.php?queryosiros=%2A%3A%28%2A%29&fq=sujets_tous%3A%28t%C3%A9l%C3%A9travail%29+AND+sujets_tous%3A%28changement+d%27organisation+du+travail%29+OR+titres_tous%3A%28teletravail%2A%29&sort_define=tri_annee
