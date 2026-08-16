@@ -37,6 +37,8 @@ THEMATIQUES_VALIDES = [
     "Urbanisme / Amenagement",
     "Action Sociale",
     "Animer / Decider / Cooperer",
+    "RH / QVCT"
+    "Innovation publique"
     "Autre",
 ]
 
@@ -47,6 +49,8 @@ KEYWORD_FIELDS = [
     "bf_mots_cle_urbanisme",
     "bf_mots_cle_action_sociale",
     "bf_mots_cle_animer",
+    "bf_mots_cle_RH",
+    "bf_mots_cle_innovation"
 ]
 
 
@@ -216,8 +220,10 @@ THEME_COLORS = {
     "Numerique":                   ("eeedfe", "534ab7", "3c3489"),
     "Finances":                    ("faeeda", "ba7517", "854f0b"),
     "Urbanisme / Amenagement":     ("e6f1fb", "185fa5", "0c447c"),
+    "RH / QVCT" :                  ("fbeaf0", "993556", "72243e"),
     "Action Sociale":              ("fbeaf0", "993556", "72243e"),
     "Animer / Decider / Cooperer": ("eaf3de", "3b6d11", "27500a"),
+    "Innovation publique" :        ("eaf3de", "3b6d11", "27500a"),
     "Autre":                       ("f1efe8", "5f5e5a", "444441"),
 }
 
