@@ -40,3 +40,11 @@ sources:
     rss_urls:
       - https://veille-travail.anact.fr/osiros/result/rss.php?queryosiros=%2A%3A%28%2A%29&fq=%28sujets_tous%3A%28%22dialogue+social%22%29%29+AND+%28sujets_tous%3A%28%22negociation+collective%22%29+OR+NOT+fulltext%3A%28norme%29+OR+titres_tous%3A%28negociation%2A%29+OR+titres_tous%3A%28dialogue+social%29%29&sort_define=date_crea_notice
       
+  - name: "ANACT - Ecologie et travail"
+    wiki_id: VeilleAnact
+    thematiques:
+      - "RH / QVCT"
+      - "Transitions"
+    rss_urls:
+      - https://veille-travail.anact.fr/osiros/result/rss.php?queryosiros=fulltext%3A%28%C3%A9cologie%29+OR+fulltext%3A%28transition+%C3%A9cologique%29+&fq=&sort_define=date_crea_notice
+      
