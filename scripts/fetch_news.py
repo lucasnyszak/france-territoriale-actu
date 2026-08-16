@@ -143,6 +143,14 @@ def fetch_resource_keywords(session, wiki_id, kw_labels):
         print("  Erreur mots-cles pour " + wiki_id + " : " + str(e), file=sys.stderr)
         return []
 
+def keywords_for_thematiques(thematiques, all_resources):
+    """Agrege les mots-cles de toutes les ressources dont la thematique
+    correspond a celles declarees pour la source RSS."""
+    kws = set()
+    for r in all_resources:
+        if r["thematique"] in thematiques:
+            kws.update(r["keywords"])
+    return sorted(kws)
 
 def fetch_rss(url):
     feed   = feedparser.parse(url, request_headers={"User-Agent": "FranceTerritoriale-Bot/1.0"})
@@ -466,11 +474,9 @@ def main():
         thematiques = source.get("thematiques", ["Autre"])
         print("\nSource : " + name)
 
-        wiki_keywords = []
-        if wiki_id:
-            wiki_keywords = fetch_resource_keywords(session, wiki_id, kw_labels)
-            preview = ", ".join(wiki_keywords[:8]) + ("..." if len(wiki_keywords) > 8 else "")
-            print("  Mots-cles : " + (preview or "aucun"))
+        wiki_keywords = keywords_for_thematiques(thematiques, all_resources)
+        preview = ", ".join(wiki_keywords[:8]) + ("..." if len(wiki_keywords) > 8 else "")
+        print("  Mots-cles : " + (preview or "aucun"))
 
         raw = []
         for url in source.get("rss_urls", []):
